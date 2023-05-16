@@ -15,11 +15,11 @@ using Unity.Netcode.Transports.UTP;
 
 public class LobbyManager : MonoBehaviour
 {
-    [SerializeField] GameObject introLobby, panelLobby,gameStartButton;
+    public Lobby hostLobby, joinnedLobby;
+    [SerializeField] GameObject introLobby, panelLobby, gameStartButton;
     [SerializeField] TMP_InputField playerName, lobbyCode;
     [SerializeField] TextMeshProUGUI playersList, lobbyCodeText;
-    [SerializeField] Transform canvas;
-    Lobby hostLobby, joinnedLobby;
+    [SerializeField] GameObject canvas;
     bool startedGame;
 
     async void Start()
@@ -50,9 +50,8 @@ public class LobbyManager : MonoBehaviour
 
         hostLobby = await Lobbies.Instance.CreateLobbyAsync("lobby", 4, options);
         joinnedLobby = hostLobby;
-        Debug.Log("Criou o lobby " + hostLobby.LobbyCode);
 
-        InvokeRepeating("SendLobbyHeartBeat", 7, 10);
+        InvokeRepeating("SendLobbyHeartBeat", 7, 7);
         lobbyCodeText.text = joinnedLobby.LobbyCode;
         ShowPlayers();
         gameStartButton.SetActive(true);
@@ -91,7 +90,6 @@ public class LobbyManager : MonoBehaviour
 
         joinnedLobby = await Lobbies.Instance.JoinLobbyByCodeAsync(lobbyCode.text, options);
         lobbyCodeText.text = joinnedLobby.LobbyCode;
-        Debug.Log("Entrou do log " + joinnedLobby.LobbyCode);
 
         ShowPlayers();
         introLobby.SetActive(false);
@@ -104,17 +102,18 @@ public class LobbyManager : MonoBehaviour
         if (hostLobby == null)
             return;
         await LobbyService.Instance.SendHeartbeatPingAsync(hostLobby.Id);
-        Debug.Log("Atualizou o lobby");
 
         UpdateLobby();
         ShowPlayers();
     }
     void ShowPlayers()
     {
+        string _temp;
         playersList.text = "";
         for (int i = 0; i < joinnedLobby.Players.Count; i++)
         {
-            playersList.text += $"{i + 1} - {joinnedLobby.Players[i].Data["name"].Value} \n";
+            _temp = joinnedLobby.Players[i].Data["name"].Value == "Guest" ? (i + 1).ToString() : null;
+            playersList.text += $"{i + 1} - {joinnedLobby.Players[i].Data["name"].Value} {_temp}\n";
         }
     }
     Player GetPlayer()
@@ -123,7 +122,7 @@ public class LobbyManager : MonoBehaviour
         {
             Data = new Dictionary<string, PlayerDataObject>
             {
-                {"name",new PlayerDataObject(PlayerDataObject.VisibilityOptions.Public,playerName.text)}
+                {"name",new PlayerDataObject(PlayerDataObject.VisibilityOptions.Public,playerName.text!=""?playerName.text:$"Guest")}
             }
         };
         return player;
@@ -166,5 +165,6 @@ public class LobbyManager : MonoBehaviour
         });
         joinnedLobby = lobby;
         panelLobby.SetActive(false);
+        canvas.SetActive(false);
     }
 }
