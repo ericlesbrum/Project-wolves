@@ -4,7 +4,4 @@ public enum RoleType
     Werewolf,
     Seer,
     Villager,
-    Doctor,
-    Witch,
-    Priest
 }

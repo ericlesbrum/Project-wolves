@@ -12,18 +12,20 @@ using Unity.Services.Relay;
 using Unity.Networking.Transport.Relay;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
+using System;
 
 public class LobbyManager : MonoBehaviour
 {
     public Lobby hostLobby, joinnedLobby;
-    [SerializeField] GameObject introLobby, panelLobby, gameStartButton;
+    [SerializeField] GameObject introLobby, panelLobby, gameStartButton, alertJoinLobby, alertStartGame;
     [SerializeField] TMP_InputField playerName, lobbyCode;
-    [SerializeField] TextMeshProUGUI playersList, lobbyCodeText;
+    [SerializeField] TextMeshProUGUI playersList, lobbyCodeText, maxLimtedPlayerMsg;
     [SerializeField] GameObject canvas;
     bool startedGame;
 
     async void Start()
     {
+        maxLimtedPlayerMsg.text = $"Número máximo de jogadores: {GameManager.Instance.maxLimitPlayers.Value}";
         await UnityServices.InitializeAsync();
     }
 
@@ -48,7 +50,7 @@ public class LobbyManager : MonoBehaviour
             }
         };
 
-        hostLobby = await Lobbies.Instance.CreateLobbyAsync("lobby", 4, options);
+        hostLobby = await Lobbies.Instance.CreateLobbyAsync("lobby", GameManager.Instance.maxLimitPlayers.Value, options);
         joinnedLobby = hostLobby;
 
         InvokeRepeating("SendLobbyHeartBeat", 7, 7);
@@ -73,7 +75,6 @@ public class LobbyManager : MonoBehaviour
             {
                 JoinRelay(joinnedLobby.Data["StartGame"].Value);
             }
-
             startedGame = true;
         }
 
@@ -88,13 +89,30 @@ public class LobbyManager : MonoBehaviour
             Player = GetPlayer()
         };
 
-        joinnedLobby = await Lobbies.Instance.JoinLobbyByCodeAsync(lobbyCode.text, options);
-        lobbyCodeText.text = joinnedLobby.LobbyCode;
+        try
+        {
+            joinnedLobby = await Lobbies.Instance.JoinLobbyByCodeAsync(lobbyCode.text, options);
+            if (joinnedLobby == null)
+                alertJoinLobby.SetActive(true);
+            lobbyCodeText.text = joinnedLobby.LobbyCode;
 
-        ShowPlayers();
-        introLobby.SetActive(false);
-        panelLobby.SetActive(true);
-        InvokeRepeating("CheckForUpdates", 3, 3);
+            ShowPlayers();
+            introLobby.SetActive(false);
+            panelLobby.SetActive(true);
+            InvokeRepeating("CheckForUpdates", 3, 3);
+        }
+        catch (ArgumentNullException ex)
+        {
+            alertJoinLobby.SetActive(true);
+        }
+        catch (AuthenticationException ex)
+        {
+            alertJoinLobby.SetActive(true);
+        }
+        catch (System.Exception ex)
+        {
+            alertJoinLobby.SetActive(true);
+        }
     }
 
     async void SendLobbyHeartBeat()
@@ -155,6 +173,11 @@ public class LobbyManager : MonoBehaviour
 
     public async void StartGame()
     {
+        if (joinnedLobby.Players.Count < GameManager.Instance.maxLimitPlayers.Value)
+        {
+            alertStartGame.SetActive(true);
+            return;
+        }
         string relayCode = await CreateRelay();
         Lobby lobby = await Lobbies.Instance.UpdateLobbyAsync(joinnedLobby.Id, new UpdateLobbyOptions
         {

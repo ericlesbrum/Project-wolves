@@ -4,9 +4,6 @@ using Unity.Netcode;
 using UnityEngine;
 using TMPro;
 using UnityEngine.UI;
-using System;
-using UnityEngine.UIElements;
-using System.Linq;
 
 public class Board : NetworkBehaviour
 {
@@ -14,7 +11,7 @@ public class Board : NetworkBehaviour
     [SerializeField] Transform parent;
     [SerializeField] GameObject avatar;
     [SerializeField] GameObject countDownScreen;
-    [SerializeField] GameObject confirmButton;
+    [SerializeField] Button confirmButton;
     [SerializeField] TextMeshProUGUI CountDownText, role;
     IEnumerator Start()
     {
@@ -25,7 +22,7 @@ public class Board : NetworkBehaviour
                 yield return new WaitForSeconds(0.5f);
             for (int i = 0; i < NetworkManager.Singleton.ConnectedClients.Count; i++)
             {
-                SetAvatarClientRpc(GameManager.Instance.characterList[i]._name, GameManager.Instance.characterList[i]._id);
+                SetAvatarClientRpc(GameManager.Instance.playerList[i]._name, GameManager.Instance.playerList[i]._id);
             }
         }
         StartCoroutine("CountDown");
@@ -33,10 +30,13 @@ public class Board : NetworkBehaviour
 
     public void Confirm()
     {
+        ConfirmTurnServerRpc();
     }
+
     [ServerRpc(RequireOwnership = false)]
     public void ConfirmTurnServerRpc(ServerRpcParams serverRpcParams = default)
     {
+        string _tempString = GameManager.Instance.playerPlayed.Value;
         var clientId = serverRpcParams.Receive.SenderClientId;
         if (NetworkManager.ConnectedClients.ContainsKey(clientId))
         {
@@ -44,10 +44,26 @@ public class Board : NetworkBehaviour
             PlayerCharacter _player = client.PlayerObject.GetComponent<PlayerCharacter>();
             if (_player.choice != 100)
             {
-                client.PlayerObject.GetComponent<PlayerCharacter>().played = true;
+                _player.played = true;
+                GameManager.Instance.playerPlayed.Value = _tempString.Replace($"NotPlayed - {clientId}", $"Played - {clientId}");
             }
+            else
+            {
+                _player.played = false;
+                GameManager.Instance.playerPlayed.Value = _tempString.Replace($"Played - {clientId}", $"NotPlayed - {clientId}");
+            }
+            SetTurnEndClient();
         }
     }
+
+    public void SetTurnEndClient()
+    {
+        if (GameManager.Instance.AllIsPlayed())
+        {
+            SetTurnEndClientRpc();
+        }
+    }
+
     [ServerRpc(RequireOwnership = false)]
     public void ToggleServerRpc(ulong choice, ServerRpcParams serverRpcParams = default)
     {
@@ -61,6 +77,11 @@ public class Board : NetworkBehaviour
     }
 
     [ClientRpc]
+    public void SetTurnEndClientRpc()
+    {
+        StartCoroutine("CountDown");
+    }
+    [ClientRpc]
     public void SetAvatarClientRpc(string playerName, ulong id)
     {
         GameObject _tempAvatar = Instantiate(avatar, parent);
@@ -69,22 +90,33 @@ public class Board : NetworkBehaviour
             avatars.Add(_tempAvatar.GetComponent<Avatar>());
     }
     [ClientRpc]
-    public void SetRolesClientRpc(PlayerCharacter player, ClientRpcParams clientRpcParams = default)
+    public void SetRolesClientRpc(string role, ClientRpcParams clientRpcParams = default)
     {
-        role.text = player.role.ToString();
+        if (IsServer)
+            this.role.text = role;
+        if (IsOwner) return;
+        this.role.text = role;
     }
 
     public void GameStarted()
     {
-        if (GameManager.Instance.gameStarted)
+        if (IsServer && GameManager.Instance.gameStarted.Value)
             return;
         if (IsServer)
         {
-            foreach (var item in GameManager.Instance.characterList)
+            GameManager.Instance.AddRoles();
+            foreach (var item in GameManager.Instance.playerList)
             {
-                SetRolesClientRpc(item);
+                ClientRpcParams clientRpcParams = new ClientRpcParams
+                {
+                    Send = new ClientRpcSendParams
+                    {
+                        TargetClientIds = new ulong[] { item._id }
+                    }
+                };
+                SetRolesClientRpc(item.role.ToString(), clientRpcParams);
             }
-            GameManager.Instance.gameStarted = true;
+            GameManager.Instance.gameStarted.Value = true;
         }
         for (int i = 0; i < avatars.Count; i++)
         {
@@ -109,7 +141,6 @@ public class Board : NetworkBehaviour
         GameStarted();
         countDownScreen.SetActive(false);
     }
-
     private void ToggleButton(int indexClicked)
     {
         for (int i = 0; i < avatars.Count; i++)

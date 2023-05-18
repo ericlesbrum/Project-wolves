@@ -1,11 +1,12 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Security.Cryptography;
 using TMPro;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.Events;
 using UnityEngine.UI;
-
 public class PlayerCharacter : NetworkBehaviour, INetworkSerializable
 {
     public RoleType role;
@@ -38,8 +39,8 @@ public class PlayerCharacter : NetworkBehaviour, INetworkSerializable
         this.role = role;
         choice = 100;
         this._name = _name != "Guest" ? _name : $"Guest {_id + 1}";
-        if (!GameManager.Instance.characterList.Contains(this))
-            GameManager.Instance.characterList.Add(this);
+        if (!GameManager.Instance.playerList.Contains(this))
+            GameManager.Instance.playerList.Add(this);
     }
     public override void OnNetworkSpawn()
     {
