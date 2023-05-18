@@ -11,7 +11,7 @@ public class PlayerCharacter : NetworkBehaviour, INetworkSerializable
 {
     public RoleType role;
     public ulong _id;
-    public bool alive, played;
+    public bool alive;
     public string _name;
     public ulong choice;
 
@@ -21,7 +21,6 @@ public class PlayerCharacter : NetworkBehaviour, INetworkSerializable
         serializer.SerializeValue(ref role);
         serializer.SerializeValue(ref _name);
         serializer.SerializeValue(ref choice);
-        serializer.SerializeValue(ref played);
         serializer.SerializeValue(ref alive);
     }
 
@@ -38,6 +37,7 @@ public class PlayerCharacter : NetworkBehaviour, INetworkSerializable
         this._id = _id;
         this.role = role;
         choice = 100;
+        alive = true;
         this._name = _name != "Guest" ? _name : $"Guest {_id + 1}";
         if (!GameManager.Instance.playerList.Contains(this))
             GameManager.Instance.playerList.Add(this);

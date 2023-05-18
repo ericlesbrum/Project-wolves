@@ -11,9 +11,9 @@ public class GameManager : NetworkBehaviour
 {
     public static GameManager Instance;
     public NetworkVariable<bool> gameStarted;
-    public NetworkVariable<bool> changeTurn;
     public NetworkVariable<int> maxLimitPlayers;
     public NetworkVariable<NetworkString> playerPlayed = new NetworkVariable<NetworkString>("");
+    public NetworkVariable<NetworkString> turn = new NetworkVariable<NetworkString>("");
     public List<PlayerCharacter> playerList;
     [SerializeField] GameObject gamePrefab;
     private void Awake()
@@ -34,8 +34,6 @@ public class GameManager : NetworkBehaviour
         {
             if (NetworkManager.Singleton.IsHost && NetworkManager.Singleton.ConnectedClients.Count == maxLimitPlayers.Value)
             {
-                for (int i = 0; i < NetworkManager.Singleton.ConnectedClients.Count; i++)
-                    playerPlayed.Value += $"NotPlayed - {i}|";
                 SpawnGame();
             }
         };

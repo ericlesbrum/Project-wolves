@@ -4,6 +4,8 @@ using Unity.Netcode;
 using UnityEngine;
 using TMPro;
 using UnityEngine.UI;
+using System.Linq;
+using Unity.Services.Lobbies.Models;
 
 public class Board : NetworkBehaviour
 {
@@ -33,29 +35,6 @@ public class Board : NetworkBehaviour
         ConfirmTurnServerRpc();
     }
 
-    [ServerRpc(RequireOwnership = false)]
-    public void ConfirmTurnServerRpc(ServerRpcParams serverRpcParams = default)
-    {
-        string _tempString = GameManager.Instance.playerPlayed.Value;
-        var clientId = serverRpcParams.Receive.SenderClientId;
-        if (NetworkManager.ConnectedClients.ContainsKey(clientId))
-        {
-            var client = NetworkManager.ConnectedClients[clientId];
-            PlayerCharacter _player = client.PlayerObject.GetComponent<PlayerCharacter>();
-            if (_player.choice != 100)
-            {
-                _player.played = true;
-                GameManager.Instance.playerPlayed.Value = _tempString.Replace($"NotPlayed - {clientId}", $"Played - {clientId}");
-            }
-            else
-            {
-                _player.played = false;
-                GameManager.Instance.playerPlayed.Value = _tempString.Replace($"Played - {clientId}", $"NotPlayed - {clientId}");
-            }
-            SetTurnEndClient();
-        }
-    }
-
     public void SetTurnEndClient()
     {
         if (GameManager.Instance.AllIsPlayed())
@@ -64,6 +43,60 @@ public class Board : NetworkBehaviour
         }
     }
 
+    private void SetAvatarButtonsInteractivity(bool canToggle)
+    {
+        avatars.ForEach(item => item.button.interactable = canToggle);
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    public void TurnSetPlayerServerRpc(ServerRpcParams serverRpcParams = default)
+    {
+        var clientId = serverRpcParams.Receive.SenderClientId;
+        string _tempString = GameManager.Instance.playerPlayed.Value;
+
+        if (NetworkManager.ConnectedClients.ContainsKey(clientId))
+        {
+            var client = NetworkManager.ConnectedClients[clientId];
+            PlayerCharacter _player = client.PlayerObject.GetComponent<PlayerCharacter>();
+            if (GameManager.Instance.turn.Value.ToString().Equals("Night"))
+            {
+                if (_player.role != RoleType.Villager)
+                {
+                    AvatarButtonClientRpc(true, ReturnClientRpcParams(clientId));
+                    UpdatePlayerPlayedStatus($"CanPlayed - {clientId}", $"NotPlayed - {clientId}");
+                }
+                else
+                {
+                    AvatarButtonClientRpc(false, ReturnClientRpcParams(clientId));
+                    UpdatePlayerPlayedStatus($"NotPlayed - {clientId}", $"CanPlayed - {clientId}");
+                }
+            }
+            else
+            {
+                AvatarButtonClientRpc(true, ReturnClientRpcParams(clientId));
+                UpdatePlayerPlayedStatus($"CanPlayed - {clientId}", $"NotPlayed - {clientId}");
+            }
+        }
+    }
+    [ServerRpc(RequireOwnership = false)]
+    public void ConfirmTurnServerRpc(ServerRpcParams serverRpcParams = default)
+    {
+        var clientId = serverRpcParams.Receive.SenderClientId;
+        if (NetworkManager.ConnectedClients.ContainsKey(clientId))
+        {
+            var client = NetworkManager.ConnectedClients[clientId];
+            PlayerCharacter _player = client.PlayerObject.GetComponent<PlayerCharacter>();
+            if (_player.choice != 100)
+            {
+                UpdatePlayerPlayedStatus($"NotPlayed - {clientId}", $"CanPlayed - {clientId}");
+            }
+            else
+            {
+                UpdatePlayerPlayedStatus($"CanPlayed - {clientId}", $"NotPlayed - {clientId}");
+            }
+            SetTurnEndClient();
+        }
+    }
     [ServerRpc(RequireOwnership = false)]
     public void ToggleServerRpc(ulong choice, ServerRpcParams serverRpcParams = default)
     {
@@ -76,10 +109,17 @@ public class Board : NetworkBehaviour
         }
     }
 
+
     [ClientRpc]
-    public void SetTurnEndClientRpc()
+    public void AvatarButtonClientRpc(bool canToggle, ClientRpcParams clientRpcParams)
+    {
+        SetAvatarButtonsInteractivity(canToggle);
+    }
+    [ClientRpc]
+    public void SetTurnEndClientRpc(ClientRpcParams clientRpcParams = default)
     {
         StartCoroutine("CountDown");
+        avatars.ForEach(avatar => avatar.SetImageVisibility(false));
     }
     [ClientRpc]
     public void SetAvatarClientRpc(string playerName, ulong id)
@@ -90,44 +130,54 @@ public class Board : NetworkBehaviour
             avatars.Add(_tempAvatar.GetComponent<Avatar>());
     }
     [ClientRpc]
-    public void SetRolesClientRpc(string role, ClientRpcParams clientRpcParams = default)
+    public void SetRolesClientRpc(PlayerCharacter player, ClientRpcParams clientRpcParams = default)
     {
         if (IsServer)
-            this.role.text = role;
+            role.text = player.role.ToString();
         if (IsOwner) return;
-        this.role.text = role;
+        role.text = player.role.ToString();
     }
 
     public void GameStarted()
     {
-        if (IsServer && GameManager.Instance.gameStarted.Value)
+        if (GameManager.Instance.gameStarted.Value)
             return;
         if (IsServer)
         {
             GameManager.Instance.AddRoles();
-            foreach (var item in GameManager.Instance.playerList)
+            GameManager.Instance.playerList.ForEach(item =>
             {
-                ClientRpcParams clientRpcParams = new ClientRpcParams
-                {
-                    Send = new ClientRpcSendParams
-                    {
-                        TargetClientIds = new ulong[] { item._id }
-                    }
-                };
-                SetRolesClientRpc(item.role.ToString(), clientRpcParams);
-            }
+                SetRolesClientRpc(item, ReturnClientRpcParams(item._id));
+            });
+            GameManager.Instance.turn.Value = "Night";
+            for (int i = 0; i < NetworkManager.Singleton.ConnectedClients.Count; i++)
+                GameManager.Instance.playerPlayed.Value += $"NotPlayed - {i}|";
             GameManager.Instance.gameStarted.Value = true;
         }
-        for (int i = 0; i < avatars.Count; i++)
-        {
-            int index = i;
-            if (NetworkManager.Singleton.LocalClientId != (ulong)index)
-                avatars[i].button.onClick.AddListener(() => ToggleButton(index));
-            else
-                avatars[i].button.interactable = false;
-        }
+        Enumerable.Range(0, avatars.Count)
+            .Where(index => NetworkManager.Singleton.LocalClientId != (ulong)index)
+            .ToList()
+            .ForEach(index => avatars[index].button.onClick.AddListener(() => ToggleButton(index)));
+        avatars[(int)NetworkManager.Singleton.LocalClientId].button.interactable = false;
+        TurnSetPlayerServerRpc();
     }
 
+    private ClientRpcParams ReturnClientRpcParams(ulong id)
+    {
+        ClientRpcParams clientRpcParams = new ClientRpcParams
+        {
+            Send = new ClientRpcSendParams
+            {
+                TargetClientIds = new ulong[] { id }
+            }
+        };
+        return clientRpcParams;
+    }
+    private void UpdatePlayerPlayedStatus(string oldStatus, string newStatus)
+    {
+        string _tempString = GameManager.Instance.playerPlayed.Value;
+        GameManager.Instance.playerPlayed.Value = _tempString.Replace(oldStatus, newStatus);
+    }
     IEnumerator CountDown()
     {
         int countDown = 5;
