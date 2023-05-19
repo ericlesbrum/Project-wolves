@@ -40,29 +40,45 @@ public class GameManager : NetworkBehaviour
     }
     public void AddRoles()
     {
-        bool hasWerewolf, hasSeer;
+        bool hasSeer;
         if (IsServer)
         {
             playerList[UnityEngine.Random.Range(0, playerList.Count)].role = RoleType.Werewolf;
-            do
+            hasSeer = playerList.Any(pc => pc.role == RoleType.Seer);
+
+            while (!hasSeer)
             {
-                hasWerewolf = playerList.Any(pc => pc.role == RoleType.Werewolf);
-                hasSeer = playerList.Any(pc => pc.role == RoleType.Seer);
                 int randomIndex = UnityEngine.Random.Range(0, playerList.Count);
-                if (playerList[randomIndex].role != RoleType.Werewolf && playerList[randomIndex].role != RoleType.Werewolf)
+                if (playerList[randomIndex].role == RoleType.None)
                     playerList[randomIndex].role = RoleType.Seer;
-            } while (hasWerewolf && hasSeer);
-            foreach (var player in playerList)
+
+                hasSeer = playerList.Any(pc => pc.role == RoleType.Seer);
+            }
+            playerList.ForEach(player =>
             {
                 if (player.role == RoleType.None)
                     player.role = RoleType.Villager;
-            }
+                NetworkManager.Singleton.ConnectedClientsList[(int)player._id].PlayerObject.GetComponent<PlayerCharacter>().role = player.role;
+            });
         }
     }
     public bool AllIsPlayed()
     {
         return !playerPlayed.Value.ToString().Contains("NotPlayed");
     }
+
+    public ClientRpcParams ReturnClientRpcParams(ulong id)
+    {
+        ClientRpcParams clientRpcParams = new ClientRpcParams
+        {
+            Send = new ClientRpcSendParams
+            {
+                TargetClientIds = new ulong[] { id }
+            }
+        };
+        return clientRpcParams;
+    }
+
     void SpawnGame()
     {
         GameObject newGame = Instantiate(gamePrefab);
