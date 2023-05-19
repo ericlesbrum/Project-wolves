@@ -1680,7 +1680,7 @@ MonoBehaviour:
   confirmButton: {fileID: 7215081663603588619}
   CountDownText: {fileID: 2684146757682415061}
   role: {fileID: 5027387201963220911}
-  turnText: {fileID: 4952186987973133194}
+  turn: {fileID: 4952186987973133194}
 --- !u!1 &7382343068309604190
 GameObject:
   m_ObjectHideFlags: 0

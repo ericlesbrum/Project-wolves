@@ -14,7 +14,7 @@ public class Board : NetworkBehaviour
     [SerializeField] GameObject avatar;
     [SerializeField] GameObject countDownScreen;
     [SerializeField] Button confirmButton;
-    [SerializeField] TextMeshProUGUI CountDownText, role;
+    [SerializeField] TextMeshProUGUI CountDownText, role, turn;
     IEnumerator Start()
     {
         LobbyManager lobby = FindObjectOfType<LobbyManager>();
@@ -30,6 +30,30 @@ public class Board : NetworkBehaviour
         StartCoroutine("CountDown");
     }
 
+    public void GameStarted()
+    {
+        if (GameManager.Instance.gameStarted.Value)
+            return;
+        if (IsServer)
+        {
+            GameManager.Instance.AddRoles();
+            GameManager.Instance.turn.Value = "Night";
+            GameManager.Instance.playerList.ForEach(item =>
+            {
+                SetRolesClientRpc(item, GameManager.Instance.ReturnClientRpcParams(item._id));
+            });
+
+            for (int i = 0; i < NetworkManager.Singleton.ConnectedClients.Count; i++)
+                GameManager.Instance.playerPlayed.Value += $"NotPlayed - {i}|";
+            GameManager.Instance.gameStarted.Value = true;
+        }
+        Enumerable.Range(0, avatars.Count)
+            .Where(index => NetworkManager.Singleton.LocalClientId != (ulong)index)
+            .ToList()
+            .ForEach(index => avatars[index].button.onClick.AddListener(() => ToggleButton(index)));
+        avatars[(int)NetworkManager.Singleton.LocalClientId].button.interactable = false;
+        TurnSetPlayerServerRpc();
+    }
     public void Confirm()
     {
         ConfirmTurnServerRpc();
@@ -116,8 +140,6 @@ public class Board : NetworkBehaviour
     [ClientRpc]
     public void SetTurnEndClientRpc(ClientRpcParams clientRpcParams = default)
     {
-        if (IsServer)
-            GameManager.Instance.turn.Value = "Morning";
         StartCoroutine("CountDown");
         avatars.ForEach(avatar => avatar.SetImageVisibility(false));
     }
@@ -130,36 +152,14 @@ public class Board : NetworkBehaviour
             avatars.Add(_tempAvatar.GetComponent<Avatar>());
     }
     [ClientRpc]
-
     public void SetRolesClientRpc(PlayerCharacter player, ClientRpcParams clientRpcParams = default)
     {
         if (IsServer)
+        {
             role.text = player.role.ToString();
+        }
         if (IsOwner) return;
         role.text = player.role.ToString();
-    }
-    public void GameStarted()
-    {
-        if (GameManager.Instance.gameStarted.Value)
-            return;
-        if (IsServer)
-        {
-            GameManager.Instance.AddRoles();
-            GameManager.Instance.playerList.ForEach(item =>
-            {
-                SetRolesClientRpc(item, GameManager.Instance.ReturnClientRpcParams(item._id));
-            });
-            GameManager.Instance.turn.Value = "Night";
-            for (int i = 0; i < NetworkManager.Singleton.ConnectedClients.Count; i++)
-                GameManager.Instance.playerPlayed.Value += $"NotPlayed - {i}|";
-            GameManager.Instance.gameStarted.Value = true;
-        }
-        Enumerable.Range(0, avatars.Count)
-            .Where(index => NetworkManager.Singleton.LocalClientId != (ulong)index)
-            .ToList()
-            .ForEach(index => avatars[index].button.onClick.AddListener(() => ToggleButton(index)));
-        avatars[(int)NetworkManager.Singleton.LocalClientId].button.interactable = false;
-        TurnSetPlayerServerRpc();
     }
 
     private void UpdatePlayerPlayedStatus(string oldStatus, string newStatus)
