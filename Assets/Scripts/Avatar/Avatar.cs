@@ -10,7 +10,7 @@ public class Avatar : NetworkBehaviour
 {
     public TextMeshProUGUI _name;
     public Button button;
-    public Image image;
+    public Image image,background;
     public ulong id;
     public bool isVisible = false;
 

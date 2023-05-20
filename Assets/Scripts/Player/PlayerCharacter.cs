@@ -12,6 +12,7 @@ public class PlayerCharacter : NetworkBehaviour, INetworkSerializable
     public RoleType role;
     public ulong _id;
     public bool alive;
+    public bool reveal;
     public string _name;
     public ulong choice;
 

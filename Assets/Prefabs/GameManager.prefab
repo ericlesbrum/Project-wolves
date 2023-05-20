@@ -49,8 +49,9 @@ MonoBehaviour:
     m_InternalValue: 0
   maxLimitPlayers:
     m_InternalValue: 0
-  playerList: []
-  gamePrefab: {fileID: 5769584810896638562}
+  turn:
+    m_InternalValue: 0
+  gamePrefab: {fileID: 7168096977118870604, guid: b752f26cf01f82a448da7790326bd9f1, type: 3}
 --- !u!114 &1670384704053197622
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -51,6 +51,10 @@ public class Board : NetworkBehaviour
                 AvatarButtonClientRpc(false, GameManager.Instance.ReturnClientRpcParams(clientId));
                 UpdatePlayerPlayedStatusClientRpc($"CanPlayed - {clientId}", $"Eliminated - {clientId}");
             }
+            else if (_player.reveal)
+            {
+                Debug.Log(_player._id.ToString());
+            }
             else
             {
                 if (GameManager.Instance.turn.Value == 1)
@@ -74,7 +78,6 @@ public class Board : NetworkBehaviour
             }
         }
     }
-
     [ServerRpc(RequireOwnership = false)]
     public void ConfirmTurnServerRpc(ServerRpcParams serverRpcParams = default)
     {
@@ -107,7 +110,7 @@ public class Board : NetworkBehaviour
     }
 
     [ClientRpc]
-    public void AvatarButtonClientRpc(bool canToggle, ClientRpcParams clientRpcParams)
+    public void AvatarButtonClientRpc(bool canToggle, ClientRpcParams clientRpcParams = default)
     {
         if (IsServer)
             SetAvatarButtonsInteractivity(canToggle);
@@ -121,7 +124,7 @@ public class Board : NetworkBehaviour
         string[] _tempPlayerPlayed = GameManager.Instance.playerPlayed.Value.ToString().Split('|');
         for (int i = 0; i < _tempPlayerPlayed.Length; i++)
         {
-            if (_tempPlayerPlayed[i].Equals($"Eliminated - {i}"))
+            if (_tempPlayerPlayed[i].Contains($"Eliminated - {i}"))
             {
                 avatars[i].button.interactable = false;
             }
@@ -157,24 +160,12 @@ public class Board : NetworkBehaviour
         this.turn.text = turn;
     }
     [ClientRpc]
-    public void UpdatePlayerPlayedStatusClientRpc(string oldStatus, string newStatus, ClientRpcParams clientRpcParams = default)
+
+    private void UpdatePlayerPlayedStatusClientRpc(string oldStatus, string newStatus, ClientRpcParams clientRpcParams = default)
     {
         if (!IsServer) return;
         string _tempString = GameManager.Instance.playerPlayed.Value;
         GameManager.Instance.playerPlayed.Value = _tempString.Replace(oldStatus, newStatus);
-    }
-    IEnumerator CountDown()
-    {
-        int countDown = 5;
-        countDownScreen.SetActive(true);
-        do
-        {
-            CountDownText.text = countDown.ToString();
-            yield return new WaitForSeconds(1f);
-            countDown--;
-        } while (countDown > 0);
-        Gameplay();
-        countDownScreen.SetActive(false);
     }
     private void Gameplay()
     {
@@ -186,7 +177,7 @@ public class Board : NetworkBehaviour
             {
                 int turnValue = GameManager.Instance.turn.Value;
                 GameManager.Instance.turn.Value = turnValue == 1 ? 0 : 1;
-                ChoosePlayerToEliminate(_tempTurnString);
+                ChoosePlayer(_tempTurnString);
                 for (int i = 0; i < NetworkManager.Singleton.ConnectedClients.Count; i++)
                 {
                     NetworkManager.Singleton.ConnectedClients[(ulong)i].PlayerObject.GetComponent<PlayerCharacter>().choice = 100;
@@ -200,16 +191,18 @@ public class Board : NetworkBehaviour
         confirmButton.interactable = true;
         TurnSetPlayerServerRpc();
     }
-    private void ChoosePlayerToEliminate(string turn)
+    private void ChoosePlayer(string turn)
     {
         List<NetworkClient> players = NetworkManager.Singleton.ConnectedClientsList.ToList();
-        Dictionary<PlayerCharacter, int> voteCount = new Dictionary<PlayerCharacter, int>();
+        Dictionary<PlayerCharacter, int> voteCountToEliminate = new Dictionary<PlayerCharacter, int>();
+        Dictionary<PlayerCharacter, int> voteCountToInspec = new Dictionary<PlayerCharacter, int>();
         foreach (NetworkClient client in players)
         {
             PlayerCharacter player = client.PlayerObject.GetComponent<PlayerCharacter>();
             if (player.alive)
             {
-                voteCount[player] = 0;
+                voteCountToEliminate[player] = 0;
+                voteCountToInspec[player] = 0;
             }
         }
         foreach (NetworkClient client in players)
@@ -217,32 +210,54 @@ public class Board : NetworkBehaviour
             PlayerCharacter player = client.PlayerObject.GetComponent<PlayerCharacter>();
             if (player.alive)
             {
+                PlayerCharacter votedPlayer;
                 if (turn.Equals("Night"))
                 {
-                    if (player.role == RoleType.Werewolf)
+                    switch (player.role)
                     {
-                        PlayerCharacter votedPlayer = ReturnPlayer(player.choice);
-                        if (votedPlayer != null)
-                            voteCount[votedPlayer]++;
+                        case RoleType.Werewolf:
+                            votedPlayer = ReturnPlayer(player.choice);
+                            if (votedPlayer != null)
+                                voteCountToEliminate[votedPlayer]++;
+                            break;
+                        case RoleType.Seer:
+                            votedPlayer = ReturnPlayer(player.choice);
+                            if (votedPlayer != null)
+                                voteCountToInspec[votedPlayer]++;
+                            break;
+                        default:
+                            break;
                     }
                 }
                 else
                 {
-                    PlayerCharacter votedPlayer = ReturnPlayer(player.choice);
+                    votedPlayer = ReturnPlayer(player.choice);
                     if (votedPlayer != null)
-                        voteCount[votedPlayer]++;
+                        voteCountToEliminate[votedPlayer]++;
                 }
             }
         }
-        PlayerCharacter playerToEliminate = voteCount
-            .OrderByDescending(x => x.Value)
-            .FirstOrDefault(x => x.Value == voteCount.Max(y => y.Value))
-            .Key;
-        if (playerToEliminate != null)
+        ProcessVote(voteCountToEliminate, voteCountToInspec);
+    }
+    private void ProcessVote(Dictionary<PlayerCharacter, int> voteCountToEliminate, Dictionary<PlayerCharacter, int> voteCountToInspect)
+    {
+        int maxEliminateVotes = voteCountToEliminate.Max(x => x.Value);
+        int maxInspectVotes = voteCountToInspect.Max(x => x.Value);
+
+        if (maxEliminateVotes > 0)
         {
+            PlayerCharacter playerToEliminate = voteCountToEliminate.FirstOrDefault(x => x.Value == maxEliminateVotes).Key;
             playerToEliminate.alive = false;
         }
+
+        if (maxInspectVotes > 0)
+        {
+            PlayerCharacter playerToInspect = voteCountToInspect.FirstOrDefault(x => x.Value == maxInspectVotes).Key;
+            if (playerToInspect.role == RoleType.Werewolf)
+                playerToInspect.reveal = true;
+        }
     }
+
     private PlayerCharacter ReturnPlayer(ulong clientId)
     {
         List<NetworkClient> players = NetworkManager.Singleton.ConnectedClientsList.ToList();
@@ -300,5 +315,19 @@ public class Board : NetworkBehaviour
         {
             SetTurnEndClientRpc();
         }
+    }
+
+    IEnumerator CountDown()
+    {
+        int countDown = 5;
+        countDownScreen.SetActive(true);
+        do
+        {
+            CountDownText.text = countDown.ToString();
+            yield return new WaitForSeconds(1f);
+            countDown--;
+        } while (countDown > 0);
+        Gameplay();
+        countDownScreen.SetActive(false);
     }
 }
