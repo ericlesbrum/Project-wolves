@@ -6,6 +6,7 @@ using TMPro;
 using UnityEngine.UI;
 using System.Linq;
 using Unity.Services.Lobbies.Models;
+using System;
 
 public class Board : NetworkBehaviour
 {
@@ -48,27 +49,28 @@ public class Board : NetworkBehaviour
             if (!_player.alive)
             {
                 AvatarButtonClientRpc(false, GameManager.Instance.ReturnClientRpcParams(clientId));
-                UpdatePlayerPlayedStatusClientRpc($"NotPlayed - {clientId}", $"Eliminated - {clientId}");
-                confirmButton.interactable = false;
-                return;
+                UpdatePlayerPlayedStatusClientRpc($"CanPlayed - {clientId}", $"Eliminated - {clientId}");
             }
-            if (GameManager.Instance.turn.Value == 1)
+            else
             {
-                if (_player.role == RoleType.Werewolf || _player.role == RoleType.Seer)
+                if (GameManager.Instance.turn.Value == 1)
+                {
+                    if (_player.role == RoleType.Werewolf || _player.role == RoleType.Seer)
+                    {
+                        AvatarButtonClientRpc(true, GameManager.Instance.ReturnClientRpcParams(clientId));
+                        UpdatePlayerPlayedStatusClientRpc($"CanPlayed - {clientId}", $"NotPlayed - {clientId}");
+                    }
+                    else
+                    {
+                        AvatarButtonClientRpc(false, GameManager.Instance.ReturnClientRpcParams(clientId));
+                        UpdatePlayerPlayedStatusClientRpc($"NotPlayed - {clientId}", $"CanPlayed - {clientId}");
+                    }
+                }
+                else
                 {
                     AvatarButtonClientRpc(true, GameManager.Instance.ReturnClientRpcParams(clientId));
                     UpdatePlayerPlayedStatusClientRpc($"CanPlayed - {clientId}", $"NotPlayed - {clientId}");
                 }
-                else
-                {
-                    AvatarButtonClientRpc(false, GameManager.Instance.ReturnClientRpcParams(clientId));
-                    UpdatePlayerPlayedStatusClientRpc($"NotPlayed - {clientId}", $"CanPlayed - {clientId}");
-                }
-            }
-            else
-            {
-                AvatarButtonClientRpc(true, GameManager.Instance.ReturnClientRpcParams(clientId));
-                UpdatePlayerPlayedStatusClientRpc($"CanPlayed - {clientId}", $"NotPlayed - {clientId}");
             }
         }
     }
@@ -113,6 +115,16 @@ public class Board : NetworkBehaviour
         {
             if (IsOwner) return;
             SetAvatarButtonsInteractivity(canToggle);
+        }
+        confirmButton.interactable = canToggle ? true : false;
+
+        string[] _tempPlayerPlayed = GameManager.Instance.playerPlayed.Value.ToString().Split('|');
+        for (int i = 0; i < _tempPlayerPlayed.Length; i++)
+        {
+            if (_tempPlayerPlayed[i].Equals($"Eliminated - {i}"))
+            {
+                avatars[i].button.interactable = false;
+            }
         }
     }
     [ClientRpc]
@@ -186,11 +198,6 @@ public class Board : NetworkBehaviour
             });
         }
         confirmButton.interactable = true;
-        NetworkManager.Singleton.ConnectedClientsIds.ToList().ForEach(item =>
-        {
-            Debug.Log(item);
-            Debug.Log(GameManager.Instance.playerPlayed.Value);
-        });
         TurnSetPlayerServerRpc();
     }
     private void ChoosePlayerToEliminate(string turn)
