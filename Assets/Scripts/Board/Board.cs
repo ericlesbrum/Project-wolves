@@ -48,12 +48,8 @@ public class Board : NetworkBehaviour
             PlayerCharacter _player = client.PlayerObject.GetComponent<PlayerCharacter>();
             if (!_player.alive)
             {
-                AvatarButtonClientRpc(false, GameManager.Instance.ReturnClientRpcParams(clientId));
                 UpdatePlayerPlayedStatusClientRpc($"CanPlayed - {clientId}", $"Eliminated - {clientId}");
-            }
-            else if (_player.reveal)
-            {
-                Debug.Log(_player._id.ToString());
+                AvatarButtonClientRpc(false, GameManager.Instance.ReturnClientRpcParams(clientId));
             }
             else
             {
@@ -61,19 +57,25 @@ public class Board : NetworkBehaviour
                 {
                     if (_player.role == RoleType.Werewolf || _player.role == RoleType.Seer)
                     {
-                        AvatarButtonClientRpc(true, GameManager.Instance.ReturnClientRpcParams(clientId));
                         UpdatePlayerPlayedStatusClientRpc($"CanPlayed - {clientId}", $"NotPlayed - {clientId}");
+                        AvatarButtonClientRpc(true, GameManager.Instance.ReturnClientRpcParams(clientId));
                     }
                     else
                     {
-                        AvatarButtonClientRpc(false, GameManager.Instance.ReturnClientRpcParams(clientId));
                         UpdatePlayerPlayedStatusClientRpc($"NotPlayed - {clientId}", $"CanPlayed - {clientId}");
+                        AvatarButtonClientRpc(false, GameManager.Instance.ReturnClientRpcParams(clientId));
                     }
                 }
                 else
                 {
+                    if (_player.reveal)
+                    {
+                        UpdatePlayerPlayedStatusClientRpc($"CanPlayed - {clientId}", $"NotPlayed - {clientId} Reveal - {clientId}");
+                        
+                    }
+                    else
+                        UpdatePlayerPlayedStatusClientRpc($"CanPlayed - {clientId}", $"NotPlayed - {clientId}");
                     AvatarButtonClientRpc(true, GameManager.Instance.ReturnClientRpcParams(clientId));
-                    UpdatePlayerPlayedStatusClientRpc($"CanPlayed - {clientId}", $"NotPlayed - {clientId}");
                 }
             }
         }
@@ -113,22 +115,18 @@ public class Board : NetworkBehaviour
     public void AvatarButtonClientRpc(bool canToggle, ClientRpcParams clientRpcParams = default)
     {
         if (IsServer)
+        {
             SetAvatarButtonsInteractivity(canToggle);
+            UpdatePlayerAvatarsClient();
+        }
         else
         {
             if (IsOwner) return;
             SetAvatarButtonsInteractivity(canToggle);
+            UpdatePlayerAvatarsClient();
         }
         confirmButton.interactable = canToggle ? true : false;
-
-        string[] _tempPlayerPlayed = GameManager.Instance.playerPlayed.Value.ToString().Split('|');
-        for (int i = 0; i < _tempPlayerPlayed.Length; i++)
-        {
-            if (_tempPlayerPlayed[i].Contains($"Eliminated - {i}"))
-            {
-                avatars[i].button.interactable = false;
-            }
-        }
+        
     }
     [ClientRpc]
     public void SetTurnEndClientRpc(ClientRpcParams clientRpcParams = default)
@@ -160,12 +158,34 @@ public class Board : NetworkBehaviour
         this.turn.text = turn;
     }
     [ClientRpc]
-
     private void UpdatePlayerPlayedStatusClientRpc(string oldStatus, string newStatus, ClientRpcParams clientRpcParams = default)
     {
-        if (!IsServer) return;
+        if (!IsServer)
+        {
+            return;
+        }
         string _tempString = GameManager.Instance.playerPlayed.Value;
         GameManager.Instance.playerPlayed.Value = _tempString.Replace(oldStatus, newStatus);
+    }
+
+    private void UpdatePlayerAvatarsClient()
+    {
+        string[] _tempPlayerPlayed = GameManager.Instance.playerPlayed.Value.ToString().Split('|');
+        for (int i = 0; i < _tempPlayerPlayed.Length; i++)
+        {
+            string playerStatus = _tempPlayerPlayed[i];
+
+            bool isEliminated = playerStatus.Contains($"Eliminated - {i}");
+            bool isRevealed = playerStatus.Contains($"Reveal - {i}");
+
+            avatars[i].button.interactable = !isEliminated;
+
+            if (isRevealed)
+            {
+                avatars[i]._name.text = "Werewolf";
+                avatars[i].background.color = Color.red;
+            }
+        }
     }
     private void Gameplay()
     {
@@ -257,7 +277,6 @@ public class Board : NetworkBehaviour
                 playerToInspect.reveal = true;
         }
     }
-
     private PlayerCharacter ReturnPlayer(ulong clientId)
     {
         List<NetworkClient> players = NetworkManager.Singleton.ConnectedClientsList.ToList();
@@ -316,6 +335,7 @@ public class Board : NetworkBehaviour
             SetTurnEndClientRpc();
         }
     }
+
 
     IEnumerator CountDown()
     {
