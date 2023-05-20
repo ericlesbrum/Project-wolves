@@ -1,7 +1,9 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
+using System.Security.Cryptography;
 using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
@@ -13,8 +15,7 @@ public class GameManager : NetworkBehaviour
     public NetworkVariable<bool> gameStarted;
     public NetworkVariable<int> maxLimitPlayers;
     public NetworkVariable<NetworkString> playerPlayed = new NetworkVariable<NetworkString>("");
-    public NetworkVariable<NetworkString> turn = new NetworkVariable<NetworkString>("");
-    public List<PlayerCharacter> playerList;
+    public NetworkVariable<int> turn = new NetworkVariable<int>(0);
     [SerializeField] GameObject gamePrefab;
     private void Awake()
     {
@@ -43,22 +44,23 @@ public class GameManager : NetworkBehaviour
         bool hasSeer;
         if (IsServer)
         {
-            playerList[UnityEngine.Random.Range(0, playerList.Count)].role = RoleType.Werewolf;
-            hasSeer = playerList.Any(pc => pc.role == RoleType.Seer);
+            int countConnectedClientsList = NetworkManager.Singleton.ConnectedClientsList.Count;
+            NetworkManager.Singleton.ConnectedClientsList[UnityEngine.Random.Range(0, countConnectedClientsList)].PlayerObject.GetComponent<PlayerCharacter>().role = RoleType.Werewolf;
+            hasSeer = NetworkManager.Singleton.ConnectedClientsList.Any(item => item.PlayerObject.GetComponent<PlayerCharacter>().role == RoleType.Seer);
 
             while (!hasSeer)
             {
-                int randomIndex = UnityEngine.Random.Range(0, playerList.Count);
-                if (playerList[randomIndex].role == RoleType.None)
-                    playerList[randomIndex].role = RoleType.Seer;
+                int randomIndex = UnityEngine.Random.Range(0, countConnectedClientsList);
+                if (NetworkManager.Singleton.ConnectedClientsList[randomIndex].PlayerObject.GetComponent<PlayerCharacter>().role == RoleType.None)
+                    NetworkManager.Singleton.ConnectedClientsList[randomIndex].PlayerObject.GetComponent<PlayerCharacter>().role = RoleType.Seer;
 
-                hasSeer = playerList.Any(pc => pc.role == RoleType.Seer);
+                hasSeer = NetworkManager.Singleton.ConnectedClientsList.ToList().Any(pc => pc.PlayerObject.GetComponent<PlayerCharacter>().role == RoleType.Seer);
             }
-            playerList.ForEach(player =>
+            NetworkManager.Singleton.ConnectedClientsList.ToList().ForEach(player =>
             {
-                if (player.role == RoleType.None)
-                    player.role = RoleType.Villager;
-                NetworkManager.Singleton.ConnectedClientsList[(int)player._id].PlayerObject.GetComponent<PlayerCharacter>().role = player.role;
+                if (player.PlayerObject.GetComponent<PlayerCharacter>().role == RoleType.None)
+                    player.PlayerObject.GetComponent<PlayerCharacter>().role = RoleType.Villager;
+                NetworkManager.Singleton.ConnectedClientsList[(int)player.PlayerObject.GetComponent<PlayerCharacter>()._id].PlayerObject.GetComponent<PlayerCharacter>().role = player.PlayerObject.GetComponent<PlayerCharacter>().role;
             });
         }
     }

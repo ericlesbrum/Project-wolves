@@ -39,8 +39,6 @@ public class PlayerCharacter : NetworkBehaviour, INetworkSerializable
         choice = 100;
         alive = true;
         this._name = _name != "Guest" ? _name : $"Guest {_id + 1}";
-        if (!GameManager.Instance.playerList.Contains(this))
-            GameManager.Instance.playerList.Add(this);
     }
     public override void OnNetworkSpawn()
     {
