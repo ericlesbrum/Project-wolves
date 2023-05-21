@@ -22,10 +22,14 @@ public class LobbyManager : MonoBehaviour
     [SerializeField] TMP_InputField playerName, lobbyCode;
     [SerializeField] TextMeshProUGUI playersList, lobbyCodeText, maxLimtedPlayerMsg;
     [SerializeField] GameObject canvas;
+    [SerializeField] Slider slider;
+    [SerializeField] TextMeshProUGUI sliderText;
     bool startedGame;
 
     async void Start()
     {
+        slider.value = GameManager.Instance.maxLimitPlayers.Value;
+        sliderText.text = GameManager.Instance.maxLimitPlayers.Value.ToString();
         maxLimtedPlayerMsg.text = $"Número máximo de jogadores: {GameManager.Instance.maxLimitPlayers.Value}";
         await UnityServices.InitializeAsync();
     }
@@ -193,5 +197,18 @@ public class LobbyManager : MonoBehaviour
         joinnedLobby = lobby;
         panelLobby.SetActive(false);
         canvas.SetActive(false);
+    }
+    public void OnSliderValueChanged(float value)
+    {
+        // Atualiza o valor da variável com o valor do slider
+        GameManager.Instance.maxLimitPlayers.Value = (int)value;
+        // Atualiza o texto exibido com o valor atual da variável
+        UpdateValueText();
+    }
+    private void UpdateValueText()
+    {
+        // Atualiza o texto exibido com o valor atual da variável
+        sliderText.text = GameManager.Instance.maxLimitPlayers.Value.ToString();
+        maxLimtedPlayerMsg.text = $"Número máximo de jogadores: {GameManager.Instance.maxLimitPlayers.Value}";
     }
 }
