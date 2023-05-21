@@ -1462,6 +1462,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: GameManager
       objectReference: {fileID: 0}
+    - target: {fileID: 7931703198546232326, guid: 7d52cc93ecceb814797f1b39c9915146, type: 3}
+      propertyPath: gamePrefab
+      value: 
+      objectReference: {fileID: 7943954265155777835, guid: b752f26cf01f82a448da7790326bd9f1, type: 3}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -3057,8 +3061,8 @@ MonoBehaviour:
           m_BoolArgument: 0
         m_CallState: 2
       - m_Target: {fileID: 899738743}
-        m_TargetAssemblyTypeName: UnityEngine.Behaviour, UnityEngine
-        m_MethodName: set_enabled
+        m_TargetAssemblyTypeName: UnityEngine.UI.Selectable, UnityEngine.UI
+        m_MethodName: set_interactable
         m_Mode: 6
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -4366,7 +4370,7 @@ MonoBehaviour:
     PlayerPrefab: {fileID: 2563045906549967860, guid: f17ab3e894587e749b14be15d49e00e3, type: 3}
     NetworkPrefabs:
     - Override: 0
-      Prefab: {fileID: 7168096977118870604, guid: b752f26cf01f82a448da7790326bd9f1, type: 3}
+      Prefab: {fileID: 7943954265155777835, guid: b752f26cf01f82a448da7790326bd9f1, type: 3}
       SourcePrefabToOverride: {fileID: 0}
       SourceHashToOverride: 0
       OverridingTargetPrefab: {fileID: 0}
