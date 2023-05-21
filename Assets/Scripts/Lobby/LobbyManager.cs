@@ -13,6 +13,7 @@ using Unity.Networking.Transport.Relay;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
 using System;
+using UnityEngine.UI;
 
 public class LobbyManager : MonoBehaviour
 {
@@ -128,6 +129,9 @@ public class LobbyManager : MonoBehaviour
     {
         string _temp;
         playersList.text = "";
+        if (GameManager.Instance.maxLimitPlayers.Value == joinnedLobby.Players.Count)
+            gameStartButton.GetComponent<Button>().interactable = true;
+
         for (int i = 0; i < joinnedLobby.Players.Count; i++)
         {
             _temp = joinnedLobby.Players[i].Data["name"].Value == "Guest" ? (i + 1).ToString() : null;
@@ -153,7 +157,7 @@ public class LobbyManager : MonoBehaviour
     }
     async Task<string> CreateRelay()
     {
-        Allocation allocation = await RelayService.Instance.CreateAllocationAsync(4);
+        Allocation allocation = await RelayService.Instance.CreateAllocationAsync(GameManager.Instance.maxLimitPlayers.Value);
         string joinCode = await RelayService.Instance.GetJoinCodeAsync(allocation.AllocationId);
         RelayServerData relayServerData = new RelayServerData(allocation, "dtls");
         NetworkManager.Singleton.GetComponent<UnityTransport>().SetRelayServerData(relayServerData);

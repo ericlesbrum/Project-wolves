@@ -6,7 +6,6 @@ using TMPro;
 using UnityEngine.UI;
 using System.Linq;
 using Unity.Services.Lobbies.Models;
-using System;
 
 public class Board : NetworkBehaviour
 {
@@ -49,10 +48,6 @@ public class Board : NetworkBehaviour
             PlayerCharacter _player = client.PlayerObject.GetComponent<PlayerCharacter>();
             if (!_player.alive)
             {
-                if (GameManager.Instance.playerPlayed.Value.ToString().Contains($"CanPlayed - {clientId}"))
-                    UpdatePlayerPlayedStatusClientRpc($"CanPlayed - {clientId}", $"Eliminated - {clientId}");
-                else
-                    UpdatePlayerPlayedStatusClientRpc($"NotPlayed - {clientId}", $"Eliminated - {clientId}");
                 AvatarButtonClientRpc(false, GameManager.Instance.ReturnClientRpcParams(clientId));
             }
             else
@@ -94,7 +89,7 @@ public class Board : NetworkBehaviour
             {
                 UpdatePlayerPlayedStatusClientRpc($"CanPlayed - {clientId}", $"NotPlayed - {clientId}");
             }
-            SetTurnEndClient();
+            SetTurnEndClient(clientId);
         }
     }
     [ServerRpc(RequireOwnership = false)]
@@ -110,11 +105,18 @@ public class Board : NetworkBehaviour
     }
 
     [ClientRpc]
+    public void TestClientRpc(ClientRpcParams clientRpcParams = default)
+    {
+        if (IsServer)
+            confirmButton.interactable = true;
+        if (IsOwner) return;
+        confirmButton.interactable = true;
+    }
+    [ClientRpc]
     public void AvatarButtonClientRpc(bool canToggle, ClientRpcParams clientRpcParams = default)
     {
         SetAvatarButtonsInteractivity(canToggle);
         confirmButton.interactable = canToggle ? true : false;
-
         string[] _tempPlayerPlayed = GameManager.Instance.playerPlayed.Value.ToString().Split('|');
         for (int i = 0; i < _tempPlayerPlayed.Length; i++)
         {
@@ -143,10 +145,10 @@ public class Board : NetworkBehaviour
     {
         if (IsServer)
         {
-            role.text = player.role.ToString();
+            role.text = $"{player._name} - {player.role}";
         }
         if (IsOwner) return;
-        role.text = player.role.ToString();
+        role.text = $"{player._name} - {player.role}";
     }
     [ClientRpc]
     public void SetTurnOnClientRpc(string turn, ClientRpcParams clientRpcParams = default)
@@ -246,31 +248,59 @@ public class Board : NetworkBehaviour
                 .FirstOrDefault(x => x.Value == maxEliminateVotes)
                 .Key;
             playerToEliminate.alive = false;
+            UpdatePlayerPlayedStatusClientRpc($"CanPlayed - {playerToEliminate._id}", $"Eliminated - {playerToEliminate._id}");
         }
-        if (maxInspectVotes > 0)
-        {
-            PlayerCharacter playerToInspect = voteCountToInspect.FirstOrDefault(x => x.Value == maxInspectVotes).Key;
-            if (playerToInspect.role == RoleType.Werewolf)
-            {
-                playerToInspect.reveal = true;
-                SendMessage("O lobisomen foi encontrado", $"O jogador {playerToInspect._name} é o lobisomen!", false);
-            }
-            else
-            {
-                SendMessage("O lobisomen não foi encontrado", $"O jogador {playerToInspect._name} não é o lobisomen!", false);
-            }
-        }
+        CheckWinCondition(maxInspectVotes > 0, voteCountToInspect, maxInspectVotes);
     }
-    private void SendMessage(string title, string description, bool endGame)
+    private void SendMessageScreen(string title, string description, bool endGame)
     {
-        if (endGame)
-        {
+        for (int i = 0; i < NetworkManager.Singleton.ConnectedClientsList.Count; i++)
+            RevealPlayerClientRpc(title, description, endGame, GameManager.Instance.ReturnClientRpcParams((ulong)i));
+    }
+    private void CheckWinCondition(bool votes, Dictionary<PlayerCharacter, int> voteCountToInspect, int maxInspectVotes)
+    {
+        int werewolfCount = 0;
+        int villagerCount = 0;
 
+        foreach (NetworkClient client in NetworkManager.Singleton.ConnectedClientsList)
+        {
+            PlayerCharacter player = client.PlayerObject.GetComponent<PlayerCharacter>();
+            if (player.alive)
+            {
+                if (player.role == RoleType.Werewolf)
+                {
+                    werewolfCount++;
+                }
+                else
+                {
+                    villagerCount++;
+                }
+            }
+        }
+
+        if (werewolfCount >= villagerCount)
+        {
+            SendMessageScreen("Os lobisomens venceram", "Não há escapatória!", true);
+        }
+        else if (werewolfCount == 0)
+        {
+            SendMessageScreen("Os aldeões venceram", "Não existem mais lobisomens entre nós!", true);
         }
         else
         {
-            for (int i = 0; i < NetworkManager.Singleton.ConnectedClientsList.Count; i++)
-                RevealPlayerClientRpc(title, description, endGame, GameManager.Instance.ReturnClientRpcParams((ulong)i));
+            if (votes)
+            {
+                PlayerCharacter playerToInspect = voteCountToInspect.FirstOrDefault(x => x.Value == maxInspectVotes).Key;
+                if (playerToInspect.role == RoleType.Werewolf)
+                {
+                    playerToInspect.reveal = true;
+                    SendMessageScreen("O lobisomen foi encontrado", $"O jogador {playerToInspect._name} é o lobisomen!", false);
+                }
+                else
+                {
+                    SendMessageScreen("O lobisomen não foi encontrado", $"O jogador {playerToInspect._name} não é o lobisomen!", false);
+                }
+            }
         }
     }
     private PlayerCharacter ReturnPlayer(ulong clientId)
@@ -324,11 +354,15 @@ public class Board : NetworkBehaviour
     {
         avatars.ForEach(item => item.button.interactable = canToggle);
     }
-    private void SetTurnEndClient()
+    private void SetTurnEndClient(ulong clientId)
     {
         if (GameManager.Instance.AllIsPlayed())
         {
             SetTurnEndClientRpc();
+        }
+        else
+        {
+            TestClientRpc(GameManager.Instance.ReturnClientRpcParams(clientId));
         }
     }
 

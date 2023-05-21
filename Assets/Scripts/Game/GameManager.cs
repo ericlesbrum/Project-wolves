@@ -25,7 +25,7 @@ public class GameManager : NetworkBehaviour
         }
         else
         {
-            maxLimitPlayers.Value = 4;
+            maxLimitPlayers.Value = 6;
             Instance = this;
         }
     }
@@ -41,27 +41,41 @@ public class GameManager : NetworkBehaviour
     }
     public void AddRoles()
     {
-        bool hasSeer;
         if (IsServer)
         {
-            int countConnectedClientsList = NetworkManager.Singleton.ConnectedClientsList.Count;
-            NetworkManager.Singleton.ConnectedClientsList[UnityEngine.Random.Range(0, countConnectedClientsList)].PlayerObject.GetComponent<PlayerCharacter>().role = RoleType.Werewolf;
-            hasSeer = NetworkManager.Singleton.ConnectedClientsList.Any(item => item.PlayerObject.GetComponent<PlayerCharacter>().role == RoleType.Seer);
+            int werewolfCount = 0;
+            int seerCount = 0;
+            int maxWerewolves = (maxLimitPlayers.Value == 16) ? 3 : 2;
 
-            while (!hasSeer)
+
+            List<int> availableIndices = new List<int>(maxLimitPlayers.Value);
+            for (int i = 0; i < maxLimitPlayers.Value; i++)
             {
-                int randomIndex = UnityEngine.Random.Range(0, countConnectedClientsList);
-                if (NetworkManager.Singleton.ConnectedClientsList[randomIndex].PlayerObject.GetComponent<PlayerCharacter>().role == RoleType.None)
-                    NetworkManager.Singleton.ConnectedClientsList[randomIndex].PlayerObject.GetComponent<PlayerCharacter>().role = RoleType.Seer;
-
-                hasSeer = NetworkManager.Singleton.ConnectedClientsList.ToList().Any(pc => pc.PlayerObject.GetComponent<PlayerCharacter>().role == RoleType.Seer);
+                availableIndices.Add(i);
             }
-            NetworkManager.Singleton.ConnectedClientsList.ToList().ForEach(player =>
+
+            Shuffle(availableIndices);
+
+            for (int i = 0; i < maxLimitPlayers.Value; i++)
             {
-                if (player.PlayerObject.GetComponent<PlayerCharacter>().role == RoleType.None)
-                    player.PlayerObject.GetComponent<PlayerCharacter>().role = RoleType.Villager;
-                NetworkManager.Singleton.ConnectedClientsList[(int)player.PlayerObject.GetComponent<PlayerCharacter>()._id].PlayerObject.GetComponent<PlayerCharacter>().role = player.PlayerObject.GetComponent<PlayerCharacter>().role;
-            });
+                int randomIndex = UnityEngine.Random.Range(0, availableIndices.Count);
+                int playerIndex = availableIndices[randomIndex];
+                if (werewolfCount < maxWerewolves)
+                {
+                    NetworkManager.Singleton.ConnectedClientsList[playerIndex].PlayerObject.GetComponent<PlayerCharacter>().role = RoleType.Werewolf;
+                    werewolfCount++;
+                }
+                else if (seerCount < 2)
+                {
+                    NetworkManager.Singleton.ConnectedClientsList[playerIndex].PlayerObject.GetComponent<PlayerCharacter>().role = RoleType.Seer;
+                    seerCount++;
+                }
+                else
+                {
+                    NetworkManager.Singleton.ConnectedClientsList[playerIndex].PlayerObject.GetComponent<PlayerCharacter>().role = RoleType.Villager;
+                }
+                availableIndices.RemoveAt(randomIndex);
+            }
         }
     }
     public bool AllIsPlayed()
@@ -81,9 +95,21 @@ public class GameManager : NetworkBehaviour
         return clientRpcParams;
     }
 
-    void SpawnGame()
+    private void SpawnGame()
     {
         GameObject newGame = Instantiate(gamePrefab);
         newGame.GetComponent<NetworkObject>().Spawn();
+    }
+    private void Shuffle<T>(List<T> list)
+    {
+        int n = list.Count;
+        while (n > 1)
+        {
+            n--;
+            int k = UnityEngine.Random.Range(0, n + 1);
+            T value = list[k];
+            list[k] = list[n];
+            list[n] = value;
+        }
     }
 }
