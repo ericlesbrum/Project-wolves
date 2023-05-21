@@ -15,6 +15,7 @@ public class Board : NetworkBehaviour
     [SerializeField] GameObject avatar;
     [SerializeField] GameObject countDownScreen;
     [SerializeField] Button confirmButton;
+    [SerializeField] Message message;
     [SerializeField] TextMeshProUGUI CountDownText, role, turn, description;
     IEnumerator Start()
     {
@@ -48,12 +49,11 @@ public class Board : NetworkBehaviour
             PlayerCharacter _player = client.PlayerObject.GetComponent<PlayerCharacter>();
             if (!_player.alive)
             {
+                if (GameManager.Instance.playerPlayed.Value.ToString().Contains($"CanPlayed - {clientId}"))
+                    UpdatePlayerPlayedStatusClientRpc($"CanPlayed - {clientId}", $"Eliminated - {clientId}");
+                else
+                    UpdatePlayerPlayedStatusClientRpc($"NotPlayed - {clientId}", $"Eliminated - {clientId}");
                 AvatarButtonClientRpc(false, GameManager.Instance.ReturnClientRpcParams(clientId));
-                UpdatePlayerPlayedStatusClientRpc($"CanPlayed - {clientId}", $"Eliminated - {clientId}");
-            }
-            else if (_player.reveal)
-            {
-                Debug.Log(_player._id.ToString());
             }
             else
             {
@@ -61,19 +61,19 @@ public class Board : NetworkBehaviour
                 {
                     if (_player.role == RoleType.Werewolf || _player.role == RoleType.Seer)
                     {
-                        AvatarButtonClientRpc(true, GameManager.Instance.ReturnClientRpcParams(clientId));
                         UpdatePlayerPlayedStatusClientRpc($"CanPlayed - {clientId}", $"NotPlayed - {clientId}");
+                        AvatarButtonClientRpc(true, GameManager.Instance.ReturnClientRpcParams(clientId));
                     }
                     else
                     {
-                        AvatarButtonClientRpc(false, GameManager.Instance.ReturnClientRpcParams(clientId));
                         UpdatePlayerPlayedStatusClientRpc($"NotPlayed - {clientId}", $"CanPlayed - {clientId}");
+                        AvatarButtonClientRpc(false, GameManager.Instance.ReturnClientRpcParams(clientId));
                     }
                 }
                 else
                 {
-                    AvatarButtonClientRpc(true, GameManager.Instance.ReturnClientRpcParams(clientId));
                     UpdatePlayerPlayedStatusClientRpc($"CanPlayed - {clientId}", $"NotPlayed - {clientId}");
+                    AvatarButtonClientRpc(true, GameManager.Instance.ReturnClientRpcParams(clientId));
                 }
             }
         }
@@ -112,13 +112,7 @@ public class Board : NetworkBehaviour
     [ClientRpc]
     public void AvatarButtonClientRpc(bool canToggle, ClientRpcParams clientRpcParams = default)
     {
-        if (IsServer)
-            SetAvatarButtonsInteractivity(canToggle);
-        else
-        {
-            if (IsOwner) return;
-            SetAvatarButtonsInteractivity(canToggle);
-        }
+        SetAvatarButtonsInteractivity(canToggle);
         confirmButton.interactable = canToggle ? true : false;
 
         string[] _tempPlayerPlayed = GameManager.Instance.playerPlayed.Value.ToString().Split('|');
@@ -160,13 +154,19 @@ public class Board : NetworkBehaviour
         this.turn.text = turn;
     }
     [ClientRpc]
-
-    private void UpdatePlayerPlayedStatusClientRpc(string oldStatus, string newStatus, ClientRpcParams clientRpcParams = default)
+    public void UpdatePlayerPlayedStatusClientRpc(string oldStatus, string newStatus, ClientRpcParams clientRpcParams = default)
     {
         if (!IsServer) return;
         string _tempString = GameManager.Instance.playerPlayed.Value;
         GameManager.Instance.playerPlayed.Value = _tempString.Replace(oldStatus, newStatus);
     }
+    [ClientRpc]
+    public void RevealPlayerClientRpc(string title, string description, bool endGame, ClientRpcParams clientRpcParams = default)
+    {
+        message.SetMsg(title, description, endGame);
+        message.gameObject.SetActive(true);
+    }
+
     private void Gameplay()
     {
         GameStarted();
@@ -199,11 +199,8 @@ public class Board : NetworkBehaviour
         foreach (NetworkClient client in players)
         {
             PlayerCharacter player = client.PlayerObject.GetComponent<PlayerCharacter>();
-            if (player.alive)
-            {
-                voteCountToEliminate[player] = 0;
-                voteCountToInspec[player] = 0;
-            }
+            voteCountToEliminate[player] = 0;
+            voteCountToInspec[player] = 0;
         }
         foreach (NetworkClient client in players)
         {
@@ -243,21 +240,39 @@ public class Board : NetworkBehaviour
     {
         int maxEliminateVotes = voteCountToEliminate.Max(x => x.Value);
         int maxInspectVotes = voteCountToInspect.Max(x => x.Value);
-
         if (maxEliminateVotes > 0)
         {
-            PlayerCharacter playerToEliminate = voteCountToEliminate.FirstOrDefault(x => x.Value == maxEliminateVotes).Key;
+            PlayerCharacter playerToEliminate = voteCountToEliminate
+                .FirstOrDefault(x => x.Value == maxEliminateVotes)
+                .Key;
             playerToEliminate.alive = false;
         }
-
         if (maxInspectVotes > 0)
         {
             PlayerCharacter playerToInspect = voteCountToInspect.FirstOrDefault(x => x.Value == maxInspectVotes).Key;
             if (playerToInspect.role == RoleType.Werewolf)
+            {
                 playerToInspect.reveal = true;
+                SendMessage("O lobisomen foi encontrado", $"O jogador {playerToInspect._name} é o lobisomen!", false);
+            }
+            else
+            {
+                SendMessage("O lobisomen não foi encontrado", $"O jogador {playerToInspect._name} não é o lobisomen!", false);
+            }
         }
     }
+    private void SendMessage(string title, string description, bool endGame)
+    {
+        if (endGame)
+        {
 
+        }
+        else
+        {
+            for (int i = 0; i < NetworkManager.Singleton.ConnectedClientsList.Count; i++)
+                RevealPlayerClientRpc(title, description, endGame, GameManager.Instance.ReturnClientRpcParams((ulong)i));
+        }
+    }
     private PlayerCharacter ReturnPlayer(ulong clientId)
     {
         List<NetworkClient> players = NetworkManager.Singleton.ConnectedClientsList.ToList();
